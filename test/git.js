@@ -2,7 +2,7 @@ import test, { beforeEach, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { EOL } from 'node:os';
 import childProcess from 'node:child_process';
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, readdirSync } from 'node:fs';
 import Git from '../lib/plugin/git/Git.js';
 import Shell from '../lib/shell.js';
 import { execOpts, touch } from '../lib/util.js';
@@ -109,6 +109,55 @@ describe('git', () => {
     childProcess.execSync('git remote rename origin upstream', execOpts);
     const gitClient = await factory(Git);
     assert.equal(await gitClient.getRemoteUrl(), bare);
+  });
+
+  test('should not run shell syntax in the branch name', async () => {
+    const bare = mkTmpDir();
+    childProcess.execSync(`git init --bare ${bare}`, execOpts);
+    childProcess.execSync(`git clone ${bare} .`, execOpts);
+    gitAdd('line', 'file', 'Add file');
+    const branch = 'fix;echo>injected';
+    childProcess.execFileSync('git', ['checkout', '-b', branch], execOpts);
+    childProcess.execFileSync('git', ['push', '--set-upstream', 'origin', branch], execOpts);
+    childProcess.execSync('git remote rename origin upstream', execOpts);
+    const gitClient = await factory(Git);
+    assert.equal(await gitClient.getRemoteUrl(), bare);
+    assert.equal(await gitClient.hasUpstreamBranch(), true);
+    assert.deepEqual(
+      readdirSync('.').filter(file => file.startsWith('injected')),
+      []
+    );
+  });
+
+  test('should not render template syntax in the branch name', async () => {
+    const bare = mkTmpDir();
+    childProcess.execSync(`git init --bare ${bare}`, execOpts);
+    childProcess.execSync(`git clone ${bare} .`, execOpts);
+    gitAdd('line', 'file', 'Add file');
+    const branch = 'fix-${process.pid}';
+    childProcess.execFileSync('git', ['checkout', '-b', branch], execOpts);
+    childProcess.execFileSync('git', ['push', '--set-upstream', 'origin', branch], execOpts);
+    childProcess.execSync('git remote rename origin upstream', execOpts);
+    const gitClient = await factory(Git);
+    assert.equal(await gitClient.getRemoteUrl(), bare);
+  });
+
+  test('should not run shell syntax in tag names', async () => {
+    childProcess.execSync('git init', execOpts);
+    gitAdd('line', 'file', 'Add file');
+    childProcess.execSync('git tag 1.0.0', execOpts);
+    gitAdd('line', 'file', 'Update file');
+    const latestTag = '1.1.0;echo>injected';
+    childProcess.execFileSync('git', ['tag', latestTag], execOpts);
+    gitAdd('line', 'file', 'Update file again');
+    const gitClient = await factory(Git);
+    assert.equal(await gitClient.getLatestTagName(), latestTag);
+    assert.equal(await gitClient.getCommitsSinceLatestTag(), 1);
+    assert.equal(await gitClient.getSecondLatestTagName(latestTag), '1.0.0');
+    assert.deepEqual(
+      readdirSync('.').filter(file => file.startsWith('injected')),
+      []
+    );
   });
 
   test('should stage, commit, tag and push', async () => {

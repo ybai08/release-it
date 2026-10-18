@@ -15,6 +15,8 @@ import {
 } from './stub/github.js';
 import { mockFetch } from './util/mock.js';
 
+const toCommand = command => (Array.isArray(command) ? command.join(' ') : command);
+
 describe('github', () => {
   const tokenRef = 'GITHUB_TOKEN';
   const pushRepo = 'git://github.com/user/repo';
@@ -257,7 +259,7 @@ describe('github', () => {
     t.mock.method(github.shell, 'exec', (...args) => {
       if (args[0] === 'git log --pretty=format:"* %s (%h)" ${from}...${to}') return Promise.resolve('');
       if (args[0] === 'git describe --tags --match=* --abbrev=0') return Promise.resolve('2.0.1');
-      if (args[0] === 'git rev-list 2.0.1 --tags --max-count=1') return Promise.resolve('a123456');
+      if (toCommand(args[0]) === 'git rev-list 2.0.1 --tags --max-count=1') return Promise.resolve('a123456');
       if (args[0] === 'git describe --tags --match=* --abbrev=0') return Promise.resolve('2.0.1');
       return original(...args);
     });
@@ -328,8 +330,8 @@ describe('github', () => {
     t.mock.method(github.shell, 'exec', (...args) => {
       if (args[0] === 'git log --pretty=format:"* %s (%h)" ${from}...${to}') return Promise.resolve('');
       if (args[0] === 'git describe --tags --match=* --abbrev=0') return Promise.resolve('2.0.1');
-      if (args[0] === 'git rev-list 2.0.1 --tags --max-count=1') return Promise.resolve('b123456');
-      if (args[0] === 'git describe --tags --abbrev=0 "b123456^"') return Promise.resolve('2.0.1');
+      if (toCommand(args[0]) === 'git rev-list 2.0.1 --tags --max-count=1') return Promise.resolve('b123456');
+      if (toCommand(args[0]) === 'git describe --tags --abbrev=0 b123456^') return Promise.resolve('2.0.1');
       return original(...args);
     });
 
@@ -351,8 +353,9 @@ describe('github', () => {
 
     const original = github.shell.exec.bind(github.shell);
     t.mock.method(github.shell, 'exec', (...args) => {
-      if (args[0] === 'git remote get-url origin') return Promise.resolve(`https://github.example.org/user/repo`);
-      if (args[0] === 'git config --get remote.origin.url')
+      if (toCommand(args[0]) === 'git remote get-url origin')
+        return Promise.resolve(`https://github.example.org/user/repo`);
+      if (toCommand(args[0]) === 'git config --get remote.origin.url')
         return Promise.resolve('https://github.example.org/user/repo');
       if (args[0] === 'git describe --tags --match=* --abbrev=0') return Promise.resolve('1.0.0');
       return original(...args);
@@ -419,7 +422,8 @@ describe('github', () => {
     t.mock.method(github.shell, 'exec', (...args) => {
       if (args[0] === 'git log --pretty=format:"* %s (%h)" ${from}...${to}') return Promise.resolve('');
       if (args[0] === 'git describe --tags --match=* --abbrev=0') return Promise.resolve('1.0.0');
-      if (args[0] === 'git remote get-url upstream') return Promise.resolve('https://custom.example.org/user/repo');
+      if (toCommand(args[0]) === 'git remote get-url upstream')
+        return Promise.resolve('https://custom.example.org/user/repo');
       return original(...args);
     });
 
